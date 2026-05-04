@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRAINROT NINJA - PIG BOMB UPDATE 🐷💣</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Arial Black', sans-serif;
+            user-select: none;
+            touch-action: none;
+        }
+        canvas { display: block; }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .score { font-size: 35px; color: #00ff00; text-shadow: 3px 3px #000; }
+        .lives { font-size: 28px; color: #ff0000; }
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            display: none;
+            background: rgba(0,0,0,0.9);
+            padding: 50px;
+            border-radius: 30px;
+            border: 8px solid #ff0000;
+            z-index: 10;
+        }
+        button {
+            padding: 20px 40px;
+            font-size: 25px;
+            background: #00ff00;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 15px;
+            box-shadow: 0 5px #008800;
+        }
+        button:hover { background: #00cc00; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="score">AURA: <span id="scoreVal">0</span></div>
+        <div class="lives">LIVES: <span id="livesVal">XXX</span></div>
+    </div>
+
+    <div id="game-over">
+        <h1 id="deathMsg">L RIZZ! 💀</h1>
+        <p>O PORCO TE EXPLODIU!</p>
+        <p style="font-size: 30px;">Score: <span id="finalScore">0</span></p>
+        <button onclick="resetGame()">RETRY (BE SIGMA)</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('scoreVal');
+    const livesEl = document.getElementById('livesVal');
+    const gameOverEl = document.getElementById('game-over');
+    const finalScoreEl = document.getElementById('finalScore');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // --- CARREGANDO AS IMAGENS ---
+    const brainrotImg = new Image();
+    brainrotImg.src = 'brainrot.png'; // Personagem palito
+
+    const bombImg = new Image();
+    bombImg.src = 'bomb.png'; // Porco-granada
+
+    let imagesLoaded = 0;
+    const totalImages = 2;
+    function checkLoaded() {
+        imagesLoaded++;
+        if (imagesLoaded === totalImages) {
+            updateUI();
+            spawn();
+            animate();
+        }
+    }
+    brainrotImg.onload = checkLoaded;
+    bombImg.onload = checkLoaded;
+    
+    // Fallback caso as imagens não carreguem
+    brainrotImg.onerror = () => alert("Erro: 'brainrot.png' não encontrado!");
+    bombImg.onerror = () => alert("Erro: 'bomb.png' não encontrado!");
+
+    let score = 0;
+    let lives = 3;
+    let gameActive = true;
+    let items = [];
+    let mouseTrail = [];
+
+    class Item {
+        constructor(isBomb = false) {
+            this.isBomb = isBomb;
+            this.w = isBomb ? 120 : 100; // Porco um pouco maior
+            this.h = isBomb ? 120 : 140;
+            this.x = Math.random() * (canvas.width - 150) + 75;
+            this.y = canvas.height + 100;
+            
+            this.vx = (Math.random() - 0.5) * 12;
+            this.vy = -(Math.random() * 6 + 16);
+            this.gravity = 0.25;
+            
+            this.angle = 0;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+            this.sliced = false;
+        }
+
+        update() {
+            this.vy += this.gravity;
+            this.x += this.vx;
+            this.y += this.vy;
+            this.angle += this.rotationSpeed;
+
+            // Se cair sem fatiar
+            if (this.y > canvas.height + 200) {
+                if (!this.isBomb && !this.sliced) {
+                    lives--;
+                    updateUI();
+                    if (lives <= 0) endGame("VOCÊ PERDEU O RIZZ!");
+                }
+                return false; 
+            }
+            return true;
+        }
+
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+            ctx.globalAlpha = 1.0; // Opacidade máxima
+
+            if (this.isBomb) {
+                // DESENHA O PORCO-GRANADA
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = "red";
+                ctx.drawImage(bombImg, -this.w/2, -this.h/2, this.w, this.h);
+            } else if (this.sliced) {
+                // DESENHA O BONECO FATIADO
+                ctx.drawImage(brainrotImg, 0, 0, brainrotImg.width, brainrotImg.height/2, -this.w/2, -this.h/2 - 20, this.w, this.h/2);
+                ctx.drawImage(brainrotImg, 0, brainrotImg.height/2, brainrotImg.width, brainrotImg.height/2, -this.w/2 + 30, 0, this.w, this.h/2);
+            } else {
+                // DESENHA O BONECO INTEIRO
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = "#00ffff";
+                ctx.drawImage(brainrotImg, -this.w/2, -this.h/2, this.w, this.h);
+            }
+            ctx.restore();
+        }
+    }
+
+    function updateUI() {
+        scoreEl.innerText = score;
+        livesEl.innerText = "X".repeat(Math.max(0, lives)) || "💀";
+    }
+
+    function endGame(msg) {
+        gameActive = false;
+        document.getElementById('deathMsg').innerText = msg;
+        finalScoreEl.innerText = score;
+        gameOverEl.style.display = 'block';
+    }
+
+    function resetGame() {
+        score = 0;
+        lives = 3;
+        items = [];
+        gameActive = true;
+        gameOverEl.style.display = 'none';
+        updateUI();
+        spawn();
+    }
+
+    function spawn() {
+        if (!gameActive) return;
+        const isBomb = Math.random() < 0.25; // 25% de chance de ser o porco
+        items.push(new Item(isBomb));
+        
+        let delay = Math.max(400, 1200 - (score * 5));
+        setTimeout(spawn, delay);
+    }
+
+    // Controle de Input
+    let isDrawing = false;
+    function checkCollision(x, y) {
+        items.forEach(item => {
+            if (!item.sliced) {
+                const dist = Math.hypot(item.x - x, item.y - y);
+                if (dist < 60) {
+                    if (item.isBomb) {
+                        endGame("O PORCO EXPLODIU! 🐷💥");
+                    } else {
+                        item.sliced = true;
+                        score += 10;
+                        updateUI();
+                    }
+                }
+            }
+        });
+    }
+
+    canvas.addEventListener('mousedown', () => isDrawing = true);
+    canvas.addEventListener('mouseup', () => { isDrawing = false; mouseTrail = []; });
+    canvas.addEventListener('mousemove', (e) => {
+        if (!isDrawing || !gameActive) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        mouseTrail.push({x, y});
+        if (mouseTrail.length > 10) mouseTrail.shift();
+        checkCollision(x, y);
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const x = e.touches[0].clientX - rect.left;
+        const y = e.touches[0].clientY - rect.top;
+        isDrawing = true;
+        mouseTrail.push({x, y});
+        if (mouseTrail.length > 10) mouseTrail.shift();
+        checkCollision(x, y);
+    }, {passive: false});
+
+    function animate() {
+        // Fundo com leve rastro
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        items = items.filter(item => {
+            const alive = item.update();
+            item.draw();
+            return alive;
+        });
+
+        // Rastro da Espada
+        if (mouseTrail.length > 1) {
+            ctx.beginPath();
+            ctx.strokeStyle = "#00ffff";
+            ctx.lineWidth = 6;
+            ctx.lineCap = "round";
+            ctx.moveTo(mouseTrail[0].x, mouseTrail[0].y);
+            mouseTrail.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
+            
+            // Brilho da espada
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
+
+</script>
+</body>
+</html>
